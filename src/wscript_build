@@ -1,16 +1,81 @@
+import platform
+
 all_sources = bld.path.ant_glob('*.cpp scene-ideas/*.cc scene-terrain/*.cpp')
 common_sources = [f for f in all_sources if f.name.find('canvas-') == -1 and
                                             f.name.find('android') == -1 and
                                             f.name.find('native-state-') == -1 and
                                             f.name.find('gl-state-') == -1 and
                                             f.name.find('main.cpp') == -1]
-common_uselibs = ['libpng']
+common_uselibs = ['libpng', 'libjpeg-turbo']
 common_defines = ['USE_EXCEPTIONS']
 
 libmatrix_sources = [f for f in bld.path.ant_glob('libmatrix/*.cc')
                      if not f.name.endswith('test.cc')]
 
 common_flavor_sources = ['main.cpp', 'canvas-generic.cpp']
+
+libpng_sources = [f for f in bld.path.ant_glob('libpng/*.c')]
+zlib_sources = [f for f in bld.path.ant_glob('zlib/*.c')]
+
+# Some sources in libjpeg-turbo are included like headers.
+libjpeg_sources = [
+  'jcapimin',
+  'jcapistd',
+  'jccoefct',
+  'jccolor',
+  'jcdctmgr',
+  'jchuff',
+  'jcinit',
+  'jcmainct',
+  'jcmarker',
+  'jcmaster',
+  'jcomapi',
+  'jcparam',
+  'jcphuff',
+  'jcprepct',
+  'jcsample',
+  'jdapimin',
+  'jdapistd',
+  'jdatadst',
+  'jdatasrc',
+  'jdcoefct',
+  'jdcolor',
+  'jddctmgr',
+  'jdhuff',
+  'jdinput',
+  'jdmainct',
+  'jdmarker',
+  'jdmaster',
+  'jdmerge',
+  'jdphuff',
+  'jdpostct',
+  'jdsample',
+  'jerror',
+  'jfdctflt',
+  'jfdctfst',
+  'jfdctint',
+  'jidctflt',
+  'jidctfst',
+  'jidctint',
+  'jidctred',
+  'jmemmgr',
+  'jmemnobs',
+  'jquant1',
+  'jquant2',
+  'jutils',
+  'jsimd_none',
+]
+
+libjpeg_turbo_sources = ['libjpeg-turbo/%s.c' % f for f in libjpeg_sources]
+
+platform_libs = []
+platform_includes = []
+
+if platform.system() == 'Windows':
+  platform_includes += ['include']
+  platform_libs = ['user32']
+else:
+  platform_libs = ['m', 'jpeg', 'dl']
 
 flavor_sources = {
   'x11-gl' : common_flavor_sources + ['native-state-x11.cpp', 'gl-state-glx.cpp'],
@@ -21,7 +86,8 @@ flavor_sources = {
   'mir-gl' : common_flavor_sources + ['native-state-mir.cpp', 'gl-state-egl.cpp'],
   'mir-glesv2' : common_flavor_sources + ['native-state-mir.cpp', 'gl-state-egl.cpp'],
   'wayland-gl' : common_flavor_sources + ['native-state-wayland.cpp', 'gl-state-egl.cpp'],
-  'wayland-glesv2' : common_flavor_sources + ['native-state-wayland.cpp', 'gl-state-egl.cpp']
+  'wayland-glesv2' : common_flavor_sources + ['native-state-wayland.cpp', 'gl-state-egl.cpp'],
+  'wgl-gl': common_flavor_sources + ['native-state-win32.cpp', 'gl-state-wgl.cpp']
 }
 flavor_uselibs = {
   'x11-gl' : ['x11', 'glad-gl', 'glad-glx', 'matrix-gl', 'common-gl'],
@@ -33,17 +99,32 @@ flavor_uselibs = {
   'mir-glesv2' : ['mirclient', 'glad-egl-mir', 'glad-glesv2', 'matrix-glesv2', 'common-glesv2'],
   'wayland-gl' : ['wayland-client', 'wayland-egl', 'glad-egl-wayland', 'glad-gl', 'matrix-gl', 'common-gl'],
   'wayland-glesv2' : ['wayland-client', 'wayland-egl', 'glad-egl-wayland', 'glad-glesv2', 'matrix-glesv2', 'common-glesv2']
+  'wgl-gl': ['glad-gl', 'matrix-gl', 'common-gl', 'libpng', 'zlib', 'libjpeg-turbo']
 }
+
 flavor_defines = {
   'x11-gl' : ['GLMARK2_USE_X11', 'GLMARK2_USE_GL', 'GLMARK2_USE_GLX'],
   'x11-glesv2' : ['GLMARK2_USE_X11', 'GLMARK2_USE_GLESv2', 'GLMARK2_USE_EGL'],
+  'dispmanx-glesv2' : ['GLMARK2_USE_DISPMANX', 'GLMARK2_USE_GLESv2', 'GLMARK2_USE_EGL'],
   'drm-gl' : ['GLMARK2_USE_DRM', 'GLMARK2_USE_GL', 'GLMARK2_USE_EGL'],
   'drm-glesv2' : ['GLMARK2_USE_DRM', 'GLMARK2_USE_GLESv2', 'GLMARK2_USE_EGL'],
   'mir-gl' : ['GLMARK2_USE_MIR', 'GLMARK2_USE_GL', 'GLMARK2_USE_EGL'],
   'mir-glesv2' : ['GLMARK2_USE_MIR', 'GLMARK2_USE_GLESv2', 'GLMARK2_USE_EGL'],
   'wayland-gl' : ['GLMARK2_USE_WAYLAND', 'GLMARK2_USE_GL', 'GLMARK2_USE_EGL'],
   'wayland-glesv2' : ['GLMARK2_USE_WAYLAND', 'GLMARK2_USE_GLESv2', 'GLMARK2_USE_EGL'],
-  'dispmanx-glesv2' : ['GLMARK2_USE_DISPMANX', 'GLMARK2_USE_GLESv2', 'GLMARK2_USE_EGL'],
+  'wgl-gl': ['GLMARK2_USE_WIN32', 'GLMARK2_USE_WGL', 'GLMARK2_USE_GL']
+}
+flavor_libs = {
+  'x11-gl' : [],
+  'x11-glesv2' : [],
+  'dispmanx-glesv2' : [],
+  'drm-gl' : [],
+  'drm-glesv2' : [],
+  'mir-gl' : [],
+  'mir-glesv2' : [],
+  'wayland-gl' : [],
+  'wayland-glesv2' : [],
+  'wgl-gl': ['opengl32', 'gdi32']
 }
 egl_platform_defines = {
   'x11' : [],
@@ -53,7 +134,7 @@ egl_platform_defines = {
   'dispmanx' : ['MESA_EGL_NO_X11_HEADERS']
 }
 
-includes = ['.', 'scene-ideas', 'scene-terrain']
+includes = ['.', 'scene-ideas', 'scene-terrain'] + platform_includes
 
 all_uselibs = set()
 
@@ -67,8 +148,8 @@ for name in bld.env.keys():
             source       = flavor_sources[flavor],
             target       = target,
             use          = common_uselibs + flavor_uselibs[flavor],
-            lib          = ['m', 'jpeg', 'dl'],
-            includes     = ['.'],
+            lib          = platform_libs + flavor_libs[flavor],
+            includes     = ['.'] + platform_includes,
             defines      = common_defines + flavor_defines[flavor] +
                            egl_platform_defines[egl_platform]
             )
@@ -120,7 +201,7 @@ if 'matrix-gl' in all_uselibs:
         target   = 'matrix-gl',
         use      = ['glad-gl'],
         lib      = ['m'],
-        includes = ['.'],
+        includes = ['.'] + platform_includes,
         export_includes = 'libmatrix',
         defines  = ['GLMARK2_USE_GL', 'USE_EXCEPTIONS']
         )
@@ -132,7 +213,7 @@ if 'matrix-glesv2' in all_uselibs:
         target   = 'matrix-glesv2',
         use      = ['glad-glesv2'],
         lib      = ['m'],
-        includes = ['.'],
+        includes = ['.'] + platform_includes,
         export_includes = 'libmatrix',
         defines  = ['GLMARK2_USE_GLESv2', 'USE_EXCEPTIONS']
         )
@@ -158,3 +239,29 @@ if 'common-glesv2' in all_uselibs:
         includes = includes,
         defines  = ['GLMARK2_USE_GLESv2', 'USE_EXCEPTIONS']
         )
+
+if 'libpng' in all_uselibs:
+    bld(
+        features  = ['c'],
+        source    = libpng_sources,
+        target    = 'libpng',
+        use       = ['zlib'],
+        export_includes = 'libpng'
+        )
+
+if 'zlib' in all_uselibs:
+    bld(
+        features  = ['c'],
+        source    = zlib_sources,
+        target    = 'zlib',
+        export_includes = 'zlib'
+        )
+
+if 'libjpeg-turbo' in all_uselibs:
+    bld(
+        features  = ['c'],
+        source    = libjpeg_turbo_sources,
+        target    = 'libjpeg-turbo',
+        export_includes = 'libjpeg-turbo'
+        )
+  

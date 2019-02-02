@@ -1,4 +1,4 @@
-import os
+import os, platform
 from waflib import Context
 
 out = 'build'
@@ -16,6 +16,7 @@ FLAVORS = {
     'mir-glesv2' : 'glmark2-es2-mir',
     'wayland-gl' : 'glmark2-wayland',
     'wayland-glesv2' : 'glmark2-es2-wayland',
+    'wgl-gl': 'glmark2-wgl',
     'dispmanx-glesv2' : 'glmark2-es2-dispmanx',
 }
 FLAVORS_STR = ", ".join(FLAVORS.keys())
@@ -59,6 +60,8 @@ def configure(ctx):
         ctx.options.flavors.remove('all')
         # dispmanx is a special case, we don't want to include it in all
         ctx.options.flavors.remove('dispmanx-glesv2')
+        # we also don't want to include WGL in 'all' since it only applies to Windows.
+        ctx.options.flavors.remove('gl-wgl')
 
     # Ensure the flavors are valid
     for flavor in ctx.options.flavors:
@@ -77,14 +80,18 @@ def configure(ctx):
     ctx.load('compiler_cxx')
 
     # Check required headers
-    req_headers = ['stdlib.h', 'string.h', 'unistd.h', 'stdint.h', 'stdio.h', 'jpeglib.h']
+    req_headers = ['stdlib.h', 'string.h', 'stdint.h', 'stdio.h']
+    if platform.system() != "Windows":
+        req_headers += ['dlsym.h', 'unistd.h', 'jpeglib.h']
+    else:
+        req_headers += ['windows.h']
     for header in req_headers:
         ctx.check_cc(header_name = header, auto_add_header_name = True, mandatory = True)
 
     # Check for required libs
-    req_libs = [('m', 'm'), ('jpeg', 'jpeg')]
-    for (lib, uselib) in req_libs:
-        ctx.check_cc(lib = lib, uselib_store = uselib)
+    # req_libs = [('m', 'm'), ('jpeg', 'jpeg')]
+    # for (lib, uselib) in req_libs:
+    #     ctx.check_cc(lib = lib, uselib_store = uselib)
 
     # Check required functions
     req_funcs = [('memset', 'string.h', []) ,('sqrt', 'math.h', ['m'])]
@@ -93,17 +100,20 @@ def configure(ctx):
                       uselib = uselib, mandatory = True)
 
     # Check for a supported version of libpng
-    supp_png_pkgs = (('libpng12', '1.2'), ('libpng15', '1.5'), ('libpng16', '1.6'),)
     have_png = False
-    for (pkg, atleast) in supp_png_pkgs:
-        try:
-            pkg_ver = ctx.check_cfg(package=pkg, uselib_store='libpng', atleast_version=atleast,
-                                    args = ['--cflags', '--libs'])
-        except:
-            continue
-        else:
-            have_png = True
-            break
+    if platform.system() != "Windows":
+        supp_png_pkgs = (('libpng12', '1.2'), ('libpng15', '1.5'), ('libpng16', '1.6'),)
+        for (pkg, atleast) in supp_png_pkgs:
+            try:
+                pkg_ver = ctx.check_cfg(package=pkg, uselib_store='libpng', atleast_version=atleast,
+                                        args = ['--cflags', '--libs'])
+            except:
+                continue
+            else:
+                have_png = True
+                break
+    else:
+        have_png = True
 
     if not have_png:
         ctx.fatal('You need to install a supported version of libpng: ' + str(supp_png_pkgs))
@@ -142,9 +152,12 @@ def configure(ctx):
     # CXXFLAGS environment variable
     if ctx.options.opt:
         ctx.env.prepend_value('CXXFLAGS', '-O2')
-    if ctx.options.debug:
-        ctx.env.prepend_value('CXXFLAGS', '-g')
-    ctx.env.prepend_value('CXXFLAGS', '-std=c++14 -Wall -Wextra -Wnon-virtual-dtor'.split(' '))
+    if ctx.env.CXX_NAME != 'msvc':
+        if ctx.options.debug:
+            ctx.env.prepend_value('CXXFLAGS', '-g')
+        ctx.env.prepend_value('CXXFLAGS', '-std=c++14 -Wall -Wextra -Wnon-virtual-dtor'.split(' '))
+    else:
+        ctx.env.prepend_value('CXXFLAGS', '/EHsc /wd4312'.split(' '))
 
     ctx.env.HAVE_EXTRAS = False
     if ctx.options.extras_path is not None:
@@ -157,8 +170,17 @@ def configure(ctx):
     else:
         data_path = os.path.join(ctx.env.DATADIR, 'glmark2')
 
+    if platform.system() == "Windows":
+        # Necessary for M_PI
+        ctx.env.append_unique('DEFINES', '_USE_MATH_DEFINES')
+        ctx.env.append_unique('DEFINES', 'WIN32')
+        # String contants have issues with Windows slashes
+        ctx.env.append_unique('DEFINES', 'GLMARK_DATA_PATH="%s"' % data_path.replace('\\', '/'))
+    else:
+        ctx.env.append_unique('DEFINES', 'GLMARK_DATA_PATH="%s"' % data_path)
+
     ctx.env.append_unique('GLMARK_DATA_PATH', data_path)
-    ctx.env.append_unique('DEFINES', 'GLMARK_DATA_PATH="%s"' % data_path)
+
     ctx.env.append_unique('DEFINES', 'GLMARK_VERSION="%s"' % VERSION)
     ctx.env.GLMARK2_VERSION = VERSION
 
