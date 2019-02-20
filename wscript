@@ -8,16 +8,17 @@ VERSION = '2017.07'
 APPNAME = 'glmark2'
 
 FLAVORS = {
-    'x11-gl' : 'glmark2',
-    'x11-glesv2' : 'glmark2-es2',
+    'dispmanx-glesv2' : 'glmark2-es2-dispmanx',
     'drm-gl' : 'glmark2-drm',
     'drm-glesv2' : 'glmark2-es2-drm',
     'mir-gl' : 'glmark2-mir',
     'mir-glesv2' : 'glmark2-es2-mir',
     'wayland-gl' : 'glmark2-wayland',
     'wayland-glesv2' : 'glmark2-es2-wayland',
+    'win32-glesv2': 'glmark2-es2',
     'wgl-gl': 'glmark2-wgl',
-    'dispmanx-glesv2' : 'glmark2-es2-dispmanx',
+    'x11-gl' : 'glmark2',
+    'x11-glesv2' : 'glmark2-es2',
 }
 FLAVORS_STR = ", ".join(FLAVORS.keys())
 
