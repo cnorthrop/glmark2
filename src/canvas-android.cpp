@@ -24,7 +24,6 @@
 #include "log.h"
 #include "options.h"
 #include "gl-headers.h"
-#include "glad/egl.h"
 
 #include <fstream>
 #include <sstream>
@@ -41,8 +40,26 @@ CanvasAndroid::init()
         EGL_NONE
     };
 
+    /* Init the GLAD entrypoints */
+    if (!egl_lib_.open_from_alternatives({"libEGL.so", "libEGL.so.1" })) {
+        Log::error("Error loading EGL library\n");
+        return false;
+    }
+
+    if (gladLoadEGLUserPtr(EGL_NO_DISPLAY, load_egl_func, &egl_lib_) == 0) {
+        Log::error("Loading EGL entry points failed\n");
+        return false;
+    }
+
     /* Get the current EGL config */
     EGLDisplay egl_display(eglGetCurrentDisplay());
+
+    /* Reinitialize GLAD with a known display */
+    if (gladLoadEGLUserPtr(egl_display, load_egl_func, &egl_lib_) == 0) {
+        Log::error("Loading EGL entry points failed\n");
+        return false;
+    }
+
     EGLContext egl_context(eglGetCurrentContext());
     EGLConfig egl_config(0);
     EGLint num_configs;
@@ -50,6 +67,16 @@ CanvasAndroid::init()
     eglQueryContext(egl_display, egl_context, EGL_CONFIG_ID, &(attribs[1]));
 
     eglChooseConfig(egl_display, attribs, &egl_config, 1, &num_configs);
+
+    /* Before calling GLES functions, init GLAD GLES */
+    if (!gles_lib_.open_from_alternatives({"libGLESv2.so", "libGLESv2.so.2"})) {
+        Log::error("Error loading GLES library\n");
+        return false;
+    }
+    if (!gladLoadGLES2(eglGetProcAddress)) {
+        Log::error("Loading GLESv2 entry points failed.");
+        return false;
+    }
 
     resize(width_, height_);
 
@@ -167,6 +194,13 @@ CanvasAndroid::resize(int width, int height)
 /*******************
  * Private methods *
  *******************/
+
+GLADapiproc
+CanvasAndroid::load_egl_func(const char *name, void *userdata)
+{
+    SharedLibrary *lib = reinterpret_cast<SharedLibrary *>(userdata);
+    return reinterpret_cast<GLADapiproc>(lib->load(name));
+}
 
 void
 CanvasAndroid::init_gl_extensions()
